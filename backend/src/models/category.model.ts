@@ -55,9 +55,9 @@ Category.init(
       comment: '排序'
     },
     icon: {
-      type: DataTypes.STRING(255),
+      type: DataTypes.TEXT('long'),
       allowNull: true,
-      comment: '图标'
+      comment: '图标/图片'
     },
     status: {
       type: DataTypes.TINYINT,

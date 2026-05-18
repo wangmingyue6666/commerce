@@ -62,7 +62,14 @@
           <h2 class="section-title">商品分类</h2>
           <div class="category-grid">
             <div class="category-card" v-for="category in categories" :key="category.id">
-              <div class="category-icon">{{ category.icon }}</div>
+              <div class="category-icon">
+                <template v-if="category.icon && category.icon.startsWith('data:image')">
+                  <img :src="category.icon" class="category-menu-icon-img" />
+                </template>
+                <template v-else>
+                  {{ category.icon || '📂' }}
+                </template>
+              </div>
               <h3>{{ category.name }}</h3>
               <p>{{ category.description }}</p>
             </div>
@@ -243,6 +250,14 @@
                 <span class="menu-icon">📋</span>
                 <span class="menu-text">订单管理</span>
               </li>
+              <li 
+                class="menu-item" 
+                :class="{ active: adminTab === 'categories' }"
+                @click="adminTab = 'categories'"
+              >
+                <span class="menu-icon">📂</span>
+                <span class="menu-text">分类管理</span>
+              </li>
             </ul>
           </div>
           
@@ -250,7 +265,7 @@
           <div class="admin-content">
             <div class="content-header">
               <h2 class="content-title">
-                {{ adminTab === 'products' ? '商品管理' : '订单管理' }}
+                {{ adminTab === 'products' ? '商品管理' : adminTab === 'orders' ? '订单管理' : '分类管理' }}
               </h2>
               <button 
                 v-if="adminTab === 'products'" 
@@ -258,6 +273,13 @@
                 @click="showAddProduct = true"
               >
                 添加商品
+              </button>
+              <button 
+                v-if="adminTab === 'categories'" 
+                class="btn btn-primary"
+                @click="openAddCategory"
+              >
+                添加分类
               </button>
             </div>
             
@@ -287,7 +309,7 @@
             </div>
             
             <!-- 订单管理 -->
-            <div v-else>
+            <div v-else-if="adminTab === 'orders'">
               <div class="product-grid">
                 <div class="product-card" v-for="order in adminOrders" :key="`admin-order-${order.id}`">
                   <div class="product-info">
@@ -306,6 +328,34 @@
               </div>
               <p v-if="loadingAdminOrders" style="text-align:center;color:#666;margin-top:12px;">订单加载中...</p>
               <p v-else-if="adminOrders.length === 0" style="text-align:center;color:#666;margin-top:12px;">暂无订单</p>
+            </div>
+
+            <!-- 分类管理 -->
+            <div v-else-if="adminTab === 'categories'">
+              <div class="product-grid">
+                <div class="product-card" v-for="category in adminCategories" :key="`admin-category-${category.id}`">
+                  <div class="product-info">
+                    <h3 class="product-name">
+                      <template v-if="category.icon && category.icon.startsWith('data:image')">
+                        <img :src="category.icon" class="category-icon-img" />
+                      </template>
+                      <template v-else>
+                        {{ category.icon || '📂' }}
+                      </template>
+                      {{ category.name }}
+                    </h3>
+                    <p class="product-description">层级：{{ category.level }}</p>
+                    <p class="product-description">排序：{{ category.sort }}</p>
+                    <p class="product-description">状态：{{ category.status === 1 ? '启用' : '禁用' }}</p>
+                    <div class="product-actions">
+                      <button class="btn btn-add-cart" @click="openEditCategory(category)">编辑</button>
+                      <button class="btn btn-secondary danger" @click="deleteCategory(category)">删除</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <p v-if="loadingAdminCategories" style="text-align:center;color:#666;margin-top:12px;">分类加载中...</p>
+              <p v-else-if="adminCategories.length === 0" style="text-align:center;color:#666;margin-top:12px;">暂无分类</p>
             </div>
           </div>
         </div>
@@ -348,15 +398,39 @@
             </div>
             <div class="form-group">
               <label>商品图片（最多10张，每张最大20MB）</label>
-              <div class="upload-section">
-                <input type="file" accept="image/*" multiple @change="handleImageUpload" />
-                <div class="upload-hint">支持上传多张图片，最多10张，每张最大20MB</div>
-                <div v-if="productImages.length > 0" class="preview-section">
-                  <div v-for="(image, index) in productImages" :key="index" class="preview-item">
-                    <img :src="image" alt="预览" class="preview-image" />
-                    <button class="btn btn-danger small" @click="removeImage(index)">删除</button>
-                  </div>
+              <div class="product-image-upload">
+                <div 
+                  class="upload-area" 
+                  :class="{ 'has-images': productImages.length > 0 }"
+                  @click="triggerProductUpload"
+                  @dragover.prevent
+                  @drop.prevent="handleProductDrop"
+                >
+                  <template v-if="productImages.length === 0">
+                    <span class="upload-icon">🖼️</span>
+                    <span class="upload-text">点击或拖拽上传图片</span>
+                    <span class="upload-hint">支持 JPG、PNG 格式，最多10张</span>
+                  </template>
+                  <template v-else>
+                    <div class="images-grid">
+                      <div v-for="(image, index) in productImages" :key="index" class="image-item">
+                        <img :src="image" alt="产品图片" class="product-preview-img" />
+                        <button class="remove-btn" @click.stop="removeImage(index)">×</button>
+                      </div>
+                      <div class="add-more" @click.stop="triggerProductUpload">
+                        <span>+ 添加更多</span>
+                      </div>
+                    </div>
+                  </template>
                 </div>
+                <input 
+                  type="file" 
+                  ref="productImageRef" 
+                  accept="image/*" 
+                  multiple
+                  style="display: none"
+                  @change="handleImageUpload" 
+                />
               </div>
             </div>
             <div class="form-group">
@@ -420,9 +494,14 @@
             <button class="close-btn" @click="showLogin = false">×</button>
           </div>
           <div class="modal-body">
+            <!-- 登录提示 -->
+            <div v-if="pendingRoute === 'orders'" class="login-hint">
+              <p>🔒 需要登录才能查看订单</p>
+              <p>请登录后继续访问</p>
+            </div>
             <div class="form-group">
               <label>用户名</label>
-              <input type="text" v-model="loginForm.username" placeholder="请输入用户名" />
+              <input type="text" v-model="loginForm.username" @input="loginForm.username = loginForm.username.trim()" placeholder="请输入用户名" />
             </div>
             <div class="form-group">
               <label>密码</label>
@@ -434,9 +513,104 @@
             </div>
             <div class="test-accounts">
               <p>测试账号：</p>
-              <p>• admin / password123</p>
-              <p>• user1 / password123</p>
-              <p>• user2 / password123</p>
+              <p>• admin/password123</p>
+              <p>• user1/password123</p>
+              <p>• user2/password123</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 添加/编辑分类模态框 -->
+      <div class="modal" v-if="showAddCategory || showEditCategory">
+        <div class="modal-content" style="width: 500px;">
+          <div class="modal-header">
+            <h3>{{ showEditCategory ? '编辑分类' : '添加分类' }}</h3>
+            <button class="close-btn" @click="closeCategoryModal">×</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-group">
+              <label>分类名称 *</label>
+              <input type="text" v-model="categoryForm.name" placeholder="请输入分类名称" />
+            </div>
+            <div class="form-group">
+              <label>内置图标</label>
+              <div class="icon-picker">
+                <div class="selected-icon" v-if="categoryForm.icon && !categoryForm.icon.startsWith('data:image')">
+                  <span class="icon-preview">{{ categoryForm.icon }}</span>
+                  <button class="btn btn-secondary small" @click="clearCategoryIcon">清除</button>
+                </div>
+                <div class="icon-grid">
+                  <button 
+                    v-for="(icon, index) in categoryIconsList" 
+                    :key="index"
+                    class="icon-item"
+                    :class="{ selected: categoryForm.icon === icon }"
+                    @click="selectCategoryIcon(icon)"
+                  >
+                    {{ icon }}
+                  </button>
+                </div>
+                <p class="icon-hint">点击选择内置图标，或上传自定义图片（图片优先）</p>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>分类图片</label>
+              <div class="category-image-upload">
+                <div 
+                  class="upload-area" 
+                  :class="{ 'has-image': categoryImages.length > 0 }"
+                  @click="triggerCategoryUpload"
+                  @dragover.prevent
+                  @drop.prevent="handleCategoryDrop"
+                >
+                  <template v-if="categoryImages.length > 0">
+                    <img :src="categoryImages[0]" alt="分类图片" class="preview-img" />
+                    <div class="upload-overlay">
+                      <span class="upload-icon">📷</span>
+                      <span>点击更换图片</span>
+                    </div>
+                    <button class="remove-btn" @click.stop="removeCategoryImage">×</button>
+                  </template>
+                  <template v-else>
+                    <span class="upload-icon">🖼️</span>
+                    <span class="upload-text">点击或拖拽上传图片</span>
+                    <span class="upload-hint">支持 JPG、PNG 格式</span>
+                  </template>
+                </div>
+                <input 
+                  type="file" 
+                  ref="categoryImageRef" 
+                  accept="image/*" 
+                  style="display: none"
+                  @change="handleCategoryImageUpload" 
+                />
+              </div>
+            </div>
+            <div class="form-group">
+              <label>排序</label>
+              <input type="number" v-model="categoryForm.sort" placeholder="数字越小越靠前" />
+            </div>
+            <div class="form-group">
+              <label>层级</label>
+              <input type="number" v-model="categoryForm.level" placeholder="分类层级" />
+            </div>
+            <div class="form-group">
+              <label>父分类ID</label>
+              <input type="number" v-model="categoryForm.parent_id" placeholder="0表示顶级分类" />
+            </div>
+            <div class="form-group">
+              <label>状态</label>
+              <select v-model="categoryForm.status">
+                <option :value="1">启用</option>
+                <option :value="0">禁用</option>
+              </select>
+            </div>
+            <div class="form-actions">
+              <button class="btn btn-primary" @click="showEditCategory ? updateCategory() : saveCategory()">
+                {{ showEditCategory ? '保存' : '创建' }}
+              </button>
+              <button class="btn btn-secondary" @click="closeCategoryModal">取消</button>
             </div>
           </div>
         </div>
@@ -572,10 +746,11 @@ const currentRole = ref<'admin' | 'user' | ''>('')
 const userMenuOpen = ref(false)
 const loadingProducts = ref(false)
 const activeTab = ref<'home' | 'products' | 'categories' | 'cart' | 'orders' | 'admin'>('home')
+const pendingRoute = ref<string>('') // 用于记录登录前想要访问的页面
 const cartItems = ref<CartViewItem[]>([])
 const orders = ref<OrderViewItem[]>([])
 const selectedOrder = ref<OrderViewItem | null>(null)
-const adminTab = ref<'products' | 'orders'>('products')
+const adminTab = ref<'products' | 'orders' | 'categories'>('products')
 const loginForm = ref({
   username: '',
   password: ''
@@ -592,8 +767,149 @@ const showUpdateStatus = ref(false)
 const selectedProduct = ref<any>(null)
 const selectedOrderForUpdate = ref<any>(null)
 
+// 分类管理相关状态
+const adminCategories = ref<any[]>([])
+const loadingAdminCategories = ref(false)
+const showAddCategory = ref(false)
+const showEditCategory = ref(false)
+const selectedCategory = ref<any>(null)
+const categoryForm = ref({
+  name: '',
+  parent_id: 0,
+  level: 1,
+  sort: 0,
+  icon: '',
+  status: 1
+})
+
+// 内置图标列表
+const categoryIconsList = [
+  '📱', '💻', '👕', '🏠', '📷', '🎵', '🎮', '⌚',
+  '💡', '🔌', '📺', '🎁', '🛒', '💰', '📦', '🚚',
+  '📱', '💻', '🖥️', '⌨️', '🖱️', '🎧', '🎤', '📡',
+  '📺', '🎬', '🎮', '🎲', '🎯', '🎨', '🎭', '🎪',
+  '👔', '👖', '👗', '👠', '👟', '🧣', '🧤', '🎩',
+  '🍎', '🍊', '🍋', '🍇', '🍓', '🍑', '🍒', '🥝',
+  '🏡', '🏢', '🏬', '🏭', '🏥', '🏫', '🏪', '🏩',
+  '🚗', '🚲', '✈️', '🚢', '🚂', '🚀', '🛸', '🚁'
+]
+
+// 选择分类图标
+const selectCategoryIcon = (icon: string) => {
+  categoryForm.value.icon = icon
+  categoryImages.value = []
+}
+
+// 清除分类图标
+const clearCategoryIcon = () => {
+  categoryForm.value.icon = ''
+}
+
+// 分类图片数组
+const categoryImages = ref<string[]>([])
+const categoryImageRef = ref<HTMLInputElement | null>(null)
+
+const triggerCategoryUpload = () => {
+  categoryImageRef.value?.click()
+}
+
+const handleCategoryDrop = (event: DragEvent) => {
+  event.preventDefault()
+  const files = event.dataTransfer?.files
+  if (files && files.length > 0) {
+    const file = files[0]
+    if (!file.type.startsWith('image/')) {
+      alert('请上传图片文件')
+      return
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      alert('图片大小不能超过20MB')
+      return
+    }
+    
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      if (e.target?.result) {
+        categoryImages.value = [e.target.result as string]
+        categoryForm.value.icon = e.target.result as string
+      }
+    }
+    reader.readAsDataURL(file)
+  }
+}
+
+const handleCategoryImageUpload = (event: Event) => {
+  const target = event.target as HTMLInputElement
+  if (target.files && target.files.length > 0) {
+    const file = target.files[0]
+    
+    if (file.size > 20 * 1024 * 1024) {
+      alert('图片大小不能超过20MB')
+      return
+    }
+    
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      if (e.target?.result) {
+        categoryImages.value = [e.target.result as string]
+        categoryForm.value.icon = e.target.result as string
+      }
+    }
+    reader.readAsDataURL(file)
+  }
+}
+
+const removeCategoryImage = () => {
+  categoryImages.value = []
+  categoryForm.value.icon = ''
+  if (categoryImageRef.value) {
+    categoryImageRef.value.value = ''
+  }
+}
+
 // 商品图片数组
 const productImages = ref<string[]>([])
+const productImageRef = ref<HTMLInputElement | null>(null)
+
+const triggerProductUpload = () => {
+  productImageRef.value?.click()
+}
+
+const handleProductDrop = (event: DragEvent) => {
+  event.preventDefault()
+  const files = event.dataTransfer?.files
+  if (files && files.length > 0) {
+    const fileArray = Array.from(files)
+    
+    // 检查是否超过10张
+    if (productImages.value.length + fileArray.length > 10) {
+      alert('最多只能上传10张图片')
+      return
+    }
+    
+    // 检查每张图片
+    for (const file of fileArray) {
+      if (!file.type.startsWith('image/')) {
+        alert('请上传图片文件')
+        return
+      }
+      if (file.size > 20 * 1024 * 1024) {
+        alert('图片大小不能超过20MB')
+        return
+      }
+    }
+    
+    // 读取所有图片
+    fileArray.forEach(file => {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const result = e.target?.result as string
+        productImages.value.push(result)
+      }
+      reader.readAsDataURL(file)
+    })
+  }
+}
 
 // 商品表单
 const productForm = ref({
@@ -827,8 +1143,8 @@ const openCart = async () => {
 const openOrders = async () => {
   const token = localStorage.getItem('token')
   if (!token) {
+    pendingRoute.value = 'orders' // 记录想要访问的页面
     showLogin.value = true
-    alert('请先登录后查看订单')
     return
   }
   activeTab.value = 'orders'
@@ -874,6 +1190,131 @@ const loadAdminOrders = async () => {
     console.error('加载订单失败:', error)
   } finally {
     loadingAdminOrders.value = false
+  }
+}
+
+// 分类管理方法
+const loadAdminCategories = async () => {
+  loadingAdminCategories.value = true
+  try {
+    const data = await request('/categories/all')
+    adminCategories.value = data?.data || []
+  } catch (error) {
+    console.error('加载分类失败:', error)
+    alert('分类加载失败，请稍后重试')
+  } finally {
+    loadingAdminCategories.value = false
+  }
+}
+
+const openAddCategory = () => {
+  categoryForm.value = {
+    name: '',
+    parent_id: 0,
+    level: 1,
+    sort: 0,
+    icon: '',
+    status: 1
+  }
+  categoryImages.value = []
+  showAddCategory.value = true
+}
+
+const openEditCategory = (category: any) => {
+  selectedCategory.value = category
+  categoryForm.value = {
+    name: category.name || '',
+    parent_id: category.parent_id || 0,
+    level: category.level || 1,
+    sort: category.sort || 0,
+    icon: category.icon || '',
+    status: category.status || 1
+  }
+  if (category.icon) {
+    categoryImages.value = [category.icon]
+  } else {
+    categoryImages.value = []
+  }
+  showEditCategory.value = true
+}
+
+const saveCategory = async () => {
+  if (!categoryForm.value.name.trim()) {
+    alert('请输入分类名称')
+    return
+  }
+
+  try {
+    const data = await request('/categories', {
+      method: 'POST',
+      body: JSON.stringify(categoryForm.value)
+    })
+    if (data?.success) {
+      alert('分类创建成功')
+      showAddCategory.value = false
+      await loadAdminCategories()
+      await loadCategories()
+    } else {
+      alert(data?.message || '创建失败')
+    }
+  } catch (error: any) {
+    alert(error?.message || '创建失败')
+  }
+}
+
+const updateCategory = async () => {
+  if (!categoryForm.value.name.trim()) {
+    alert('请输入分类名称')
+    return
+  }
+
+  try {
+    const data = await request(`/categories/${selectedCategory.value.id}`, {
+      method: 'PUT',
+      body: JSON.stringify(categoryForm.value)
+    })
+    if (data?.success) {
+      alert('分类更新成功')
+      showEditCategory.value = false
+      selectedCategory.value = null
+      await loadAdminCategories()
+      await loadCategories()
+    } else {
+      alert(data?.message || '更新失败')
+    }
+  } catch (error: any) {
+    alert(error?.message || '更新失败')
+  }
+}
+
+const deleteCategory = async (category: any) => {
+  if (!confirm(`确定要删除分类 "${category.name}" 吗？`)) {
+    return
+  }
+
+  try {
+    const data = await request(`/categories/${category.id}`, {
+      method: 'DELETE'
+    })
+    if (data?.success) {
+      alert('删除成功')
+      await loadAdminCategories()
+      await loadCategories()
+    } else {
+      alert(data?.message || '删除失败')
+    }
+  } catch (error: any) {
+    alert(error?.message || '删除失败')
+  }
+}
+
+const closeCategoryModal = () => {
+  showAddCategory.value = false
+  showEditCategory.value = false
+  selectedCategory.value = null
+  categoryImages.value = []
+  if (categoryImageRef.value) {
+    categoryImageRef.value.value = ''
   }
 }
 
@@ -1139,6 +1580,14 @@ const handleLogin = async () => {
     alert(`登录成功！欢迎 ${currentUser.value}`)
     showLogin.value = false
     loginForm.value = { username: '', password: '' }
+    
+    // 登录成功后自动跳转到之前记录的页面
+    if (pendingRoute.value) {
+      if (pendingRoute.value === 'orders') {
+        activeTab.value = 'orders'
+      }
+      pendingRoute.value = ''
+    }
   } catch (error: any) {
     console.error('登录错误:', error)
     alert(error?.message || error?.response?.data?.message || '登录失败，请检查用户名和密码')
@@ -1163,6 +1612,9 @@ watch(activeTab, async (newTab, oldTab) => {
 watch(adminTab, async (newTab, oldTab) => {
   if (newTab === 'products' && activeTab.value === 'admin') {
     await loadAdminProducts()
+  }
+  if (newTab === 'categories' && activeTab.value === 'admin') {
+    await loadAdminCategories()
   }
 })
 </script>
@@ -1949,8 +2401,283 @@ body {
   border: none;
 }
 
-.btn-danger:hover {
-  background: #ff3838;
+/* 分类图片上传组件 */
+.category-image-upload {
+  width: 100%;
+}
+
+.upload-area {
+  width: 100%;
+  min-height: 200px;
+  border: 3px dashed #d1d5db;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.upload-area:hover {
+  border-color: #667eea;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(102, 126, 234, 0.15);
+}
+
+.upload-area.has-image {
+  border: 3px solid #667eea;
+  padding: 0;
+  min-height: 200px;
+}
+
+.upload-area.has-image:hover {
+  border-color: #764ba2;
+}
+
+.upload-icon {
+  font-size: 48px;
+  opacity: 0.6;
+  transition: all 0.3s;
+}
+
+.upload-area:hover .upload-icon {
+  transform: scale(1.1);
+  opacity: 1;
+}
+
+.upload-text {
+  font-size: 16px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.upload-hint {
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.preview-img {
+  width: 100%;
+  height: 200px;
+  object-fit: cover;
+  display: block;
+}
+
+.upload-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 8px;
+  opacity: 0;
+  transition: all 0.3s;
+}
+
+.upload-area.has-image:hover .upload-overlay {
+  opacity: 1;
+}
+
+.upload-overlay .upload-icon {
+  font-size: 32px;
+  opacity: 1;
+}
+
+.upload-overlay span {
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.remove-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 71, 87, 0.9);
+  color: white;
+  border: none;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s;
+  box-shadow: 0 2px 8px rgba(255, 71, 87, 0.3);
+}
+
+.remove-btn:hover {
+  background: #ff4757;
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(255, 71, 87, 0.4);
+}
+
+/* 产品图片上传组件 */
+.product-image-upload {
+  width: 100%;
+}
+
+.product-image-upload .upload-area {
+  width: 100%;
+  min-height: 200px;
+  border: 3px dashed #d1d5db;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  position: relative;
+  padding: 20px;
+}
+
+.product-image-upload .upload-area:hover {
+  border-color: #667eea;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(102, 126, 234, 0.15);
+}
+
+.product-image-upload .upload-area.has-images {
+  border: 3px solid #667eea;
+  min-height: auto;
+  padding: 15px;
+}
+
+.images-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  width: 100%;
+}
+
+.image-item {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.product-preview-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.add-more {
+  aspect-ratio: 1;
+  border: 2px dashed #cbd5e1;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.add-more:hover {
+  border-color: #667eea;
+  background: #f0f9ff;
+  color: #667eea;
+}
+
+/* 图标选择器 */
+.icon-picker {
+  width: 100%;
+}
+
+.selected-icon {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 10px 15px;
+  background: #f0f9ff;
+  border-radius: 8px;
+  border: 1px solid #e0f2fe;
+}
+
+.icon-preview {
+  font-size: 28px;
+}
+
+.icon-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 10px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.icon-item {
+  width: 100%;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  border: none;
+  background: white;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.icon-item:hover {
+  background: #f0f9ff;
+  transform: scale(1.1);
+}
+
+.icon-item.selected {
+  background: #e0f2fe;
+  border: 2px solid #667eea;
+}
+
+.icon-hint {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #94a3b8;
+  text-align: center;
+}
+
+.category-icon-img {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  object-fit: cover;
+  vertical-align: middle;
+  margin-right: 8px;
+}
+
+.category-menu-icon-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 8px;
 }
 
 .form-actions {
@@ -1992,6 +2719,21 @@ body {
 
 .test-accounts p {
   margin: 5px 0;
+}
+
+.login-hint {
+  background: #fff3cd;
+  border: 1px solid #ffeeba;
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.login-hint p {
+  margin: 6px 0;
+  color: #856404;
+  font-size: 14px;
 }
 
 /* 页脚 */
