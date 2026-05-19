@@ -532,4 +532,123 @@ router.get('/user/stats', async (req, res) => {
   }
 });
 
+// 取消订单（用户）
+router.post('/:id/cancel', [
+  param('id').isInt({ min: 1 }).toInt()
+], async (req, res) => {
+  const transaction = await sequelize.transaction();
+  
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      await transaction.rollback();
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
+    const orderId = req.params.id;
+    const userId = (req as any).user.id;
+
+    const order = await Order.findOne({
+      where: { id: orderId, user_id: userId },
+      include: [{ model: OrderItem, as: 'items' }]
+    });
+
+    if (!order) {
+      await transaction.rollback();
+      return res.status(404).json({ success: false, message: '订单不存在' });
+    }
+
+    if (!order.canCancel()) {
+      await transaction.rollback();
+      return res.status(400).json({ 
+        success: false, 
+        message: '该订单无法取消，当前状态：' + order.status 
+      });
+    }
+
+    // 更新订单状态
+    order.status = OrderStatus.CANCELLED;
+    order.cancelled_at = new Date();
+    await order.save({ transaction });
+
+    // 恢复库存
+    for (const item of order.items) {
+      const product = await Product.findByPk(item.product_id, { transaction });
+      if (product) {
+        product.increaseStock(item.quantity);
+        await product.save({ transaction });
+      }
+    }
+
+    await transaction.commit();
+
+    res.json({
+      success: true,
+      message: '订单取消成功',
+      data: order
+    });
+  } catch (error) {
+    await transaction.rollback();
+    logger.error('取消订单失败:', error);
+    res.status(500).json({ success: false, message: '服务器内部错误' });
+  }
+});
+
+// 编辑订单（修改地址、备注等）
+router.put('/:id', [
+  param('id').isInt({ min: 1 }).toInt(),
+  body('shipping_address').optional().trim().notEmpty(),
+  body('receiver').optional().trim().notEmpty(),
+  body('receiver_phone').optional().trim().notEmpty(),
+  body('note').optional().trim()
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
+    const orderId = req.params.id;
+    const userId = (req as any).user.id;
+    const isAdmin = (req as any).user.role === 'admin';
+
+    const where: any = { id: orderId };
+    if (!isAdmin) {
+      where.user_id = userId;
+    }
+
+    const order = await Order.findOne({ where });
+    if (!order) {
+      return res.status(404).json({ success: false, message: '订单不存在或无权访问' });
+    }
+
+    // 只有待支付状态的订单可以编辑收货信息
+    if (order.status !== OrderStatus.PENDING && !isAdmin) {
+      return res.status(400).json({ 
+        success: false, 
+        message: '该订单无法编辑，当前状态：' + order.status 
+      });
+    }
+
+    const { shipping_address, receiver, receiver_phone, note } = req.body;
+
+    // 更新订单信息
+    if (shipping_address) order.shipping_address = shipping_address;
+    if (receiver) order.receiver = receiver;
+    if (receiver_phone) order.receiver_phone = receiver_phone;
+    if (note !== undefined) order.note = note;
+
+    await order.save();
+
+    res.json({
+      success: true,
+      message: '订单信息更新成功',
+      data: order
+    });
+  } catch (error) {
+    logger.error('编辑订单失败:', error);
+    res.status(500).json({ success: false, message: '服务器内部错误' });
+  }
+});
+
 export default router;

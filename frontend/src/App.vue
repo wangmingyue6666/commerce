@@ -186,17 +186,33 @@
         <div class="container">
           <div class="section-header">
             <h2 class="section-title">我的购物车</h2>
-            <a href="#" class="view-all" @click.prevent="refreshCartCount">刷新</a>
+            <div class="cart-actions">
+              <button class="btn btn-primary" @click="checkoutFromCart" :disabled="!hasCheckedItems">去结算</button>
+              <button class="btn btn-secondary" @click="clearCart">清空购物车</button>
+              <button class="btn btn-secondary" @click="refreshCartCount">刷新</button>
+            </div>
           </div>
-          <div v-if="cartItems.length === 0" style="text-align:center;color:#666;">购物车为空</div>
-          <div class="product-grid" v-else>
-            <div class="product-card" v-for="item in cartItems" :key="item.id">
-              <div class="product-image">
-                <img :src="item.product?.image || item.product?.main_image || 'https://via.placeholder.com/300x200/409eff/ffffff?text=商品'" :alt="item.product?.name || '商品'" />
+          <div v-if="cartItems.length === 0" style="text-align:center;color:#666;padding:40px;">
+            <p style="font-size:16px;margin-bottom:20px;"> 购物车空空如也</p>
+            <button class="btn btn-primary" @click="activeTab = 'products'">去逛逛</button>
+          </div>
+          <div class="cart-grid" v-else>
+            <div class="cart-item" v-for="item in cartItems" :key="item.id">
+              <div class="cart-item-image">
+                <img :src="item.product?.main_image || 'https://via.placeholder.com/100x100/409eff/ffffff?text=商品'" :alt="item.product?.name || '商品'" />
               </div>
-              <div class="product-info">
-                <h3 class="product-name">{{ item.product?.name || '未知商品' }}</h3>
-                <p class="product-description">数量：{{ item.quantity }}</p>
+              <div class="cart-item-info">
+                <h3 class="cart-item-name">{{ item.product?.name || '未知商品' }}</h3>
+                <p class="cart-item-price">单价：¥{{ item.product?.price || 0 }}</p>
+                <div class="cart-item-quantity">
+                  <button class="btn-qty" @click="updateQuantity(item, -1)" :disabled="item.quantity <= 1">-</button>
+                  <input type="number" :value="item.quantity" @change="onQuantityChange(item, $event)" class="qty-input" min="1" max="99" />
+                  <button class="btn-qty" @click="updateQuantity(item, 1)">+</button>
+                </div>
+                <p class="cart-item-subtotal">小计：¥{{ (Number(item.product?.price || 0) * item.quantity).toFixed(2) }}</p>
+              </div>
+              <div class="cart-item-actions">
+                <button class="btn btn-danger" @click="removeFromCart(item)">删除</button>
               </div>
             </div>
           </div>
@@ -618,22 +634,76 @@
 
       <!-- 订单详情模态框 -->
       <div class="modal" v-if="showOrderDetail && selectedOrder">
-        <div class="modal-content">
+        <div class="modal-content large">
           <div class="modal-header">
             <h3>订单详情</h3>
             <button class="close-btn" @click="showOrderDetail = false">×</button>
           </div>
           <div class="modal-body">
-            <p><strong>订单号：</strong>{{ selectedOrder.orderNo }}</p>
-            <p><strong>状态：</strong>{{ selectedOrder.status }}</p>
-            <p><strong>总金额：</strong>¥{{ selectedOrder.totalAmount }}</p>
-            <p><strong>创建时间：</strong>{{ formatOrderDate(selectedOrder.createdAt) }}</p>
-            <div class="test-accounts" style="margin-top: 12px;">
-              <p><strong>商品明细</strong></p>
-              <p v-if="!selectedOrder.items || selectedOrder.items.length === 0">暂无商品明细</p>
-              <p v-for="(item, idx) in selectedOrder.items" :key="`item-${idx}`">
-                • {{ item.productName }} x {{ item.quantity }} = ¥{{ item.subtotal }}
-              </p>
+            <div class="order-detail-section">
+              <div class="order-info-row">
+                <span class="label">订单号：</span>
+                <span class="value">{{ selectedOrder.orderNo }}</span>
+              </div>
+              <div class="order-info-row">
+                <span class="label">订单状态：</span>
+                <span class="value status-badge" :class="selectedOrder.status">{{ getStatusText(selectedOrder.status) }}</span>
+              </div>
+              <div class="order-info-row">
+                <span class="label">创建时间：</span>
+                <span class="value">{{ formatOrderDate(selectedOrder.createdAt) }}</span>
+              </div>
+              <div class="order-info-row" v-if="selectedOrder.paidAt">
+                <span class="label">支付时间：</span>
+                <span class="value">{{ formatOrderDate(selectedOrder.paidAt) }}</span>
+              </div>
+            </div>
+            
+            <div class="order-shipping-section">
+              <h4>收货信息</h4>
+              <p><strong>收货人：</strong>{{ selectedOrder.receiver }}</p>
+              <p><strong>手机号：</strong>{{ selectedOrder.receiverPhone }}</p>
+              <p><strong>收货地址：</strong>{{ selectedOrder.shippingAddress }}</p>
+              <p v-if="selectedOrder.note"><strong>备注：</strong>{{ selectedOrder.note }}</p>
+            </div>
+            
+            <div class="order-items-section">
+              <h4>商品明细</h4>
+              <div class="order-item-list">
+                <div class="order-item-row" v-for="(item, idx) in selectedOrder.items" :key="`item-${idx}`">
+                  <img :src="item.product?.main_image || 'https://via.placeholder.com/60x60/409eff/ffffff?text=商品'" class="order-item-img" />
+                  <div class="order-item-info">
+                    <p class="item-name">{{ item.product_name || item.product?.name }}</p>
+                    <p class="item-meta">单价：¥{{ item.price }} × {{ item.quantity }}</p>
+                  </div>
+                  <div class="order-item-total">¥{{ item.subtotal }}</div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="order-total-section">
+              <div class="total-row">
+                <span>商品总额：</span>
+                <span>¥{{ selectedOrder.totalAmount }}</span>
+              </div>
+              <div class="total-row" v-if="selectedOrder.discountAmount > 0">
+                <span>优惠金额：</span>
+                <span>-¥{{ selectedOrder.discountAmount }}</span>
+              </div>
+              <div class="total-row" v-if="selectedOrder.shippingFee > 0">
+                <span>运费：</span>
+                <span>¥{{ selectedOrder.shippingFee }}</span>
+              </div>
+              <div class="total-row final">
+                <span>实付金额：</span>
+                <span class="final-amount">¥{{ selectedOrder.finalAmount || selectedOrder.totalAmount }}</span>
+              </div>
+            </div>
+            
+            <div class="order-actions">
+              <button v-if="selectedOrder.status === 'pending'" class="btn btn-primary" @click="cancelOrder(selectedOrder)">取消订单</button>
+              <button v-if="selectedOrder.status === 'pending'" class="btn btn-secondary" @click="editOrder(selectedOrder)">编辑订单</button>
+              <button class="btn btn-secondary" @click="showOrderDetail = false">关闭</button>
             </div>
           </div>
         </div>
@@ -1056,10 +1126,18 @@ const loadOrders = async () => {
     const list = (data?.data || []) as any[]
     orders.value = list.map((item) => ({
       id: item.id,
-      orderNo: item.orderNo || item.order_no || `ORD-${item.id}`,
-      totalAmount: Number(item.totalAmount || item.total_amount || 0),
+      orderNo: item.order_no || `ORD-${item.id}`,
+      totalAmount: Number(item.total_amount || 0),
+      finalAmount: Number(item.final_amount || item.total_amount || 0),
+      discountAmount: Number(item.discount_amount || 0),
+      shippingFee: Number(item.shipping_fee || 0),
       status: item.status || 'pending',
-      createdAt: item.createdAt || item.created_at || new Date().toISOString(),
+      createdAt: item.created_at || new Date().toISOString(),
+      paidAt: item.paid_at,
+      receiver: item.receiver,
+      receiverPhone: item.receiver_phone,
+      shippingAddress: item.shipping_address,
+      note: item.note,
       items: Array.isArray(item.items) ? item.items : []
     }))
   } catch (error) {
@@ -1095,7 +1173,7 @@ const addToCart = async (product: Product) => {
     await request('/cart', {
       method: 'POST',
       body: JSON.stringify({
-        productId: product.id,
+        product_id: product.id,
         quantity: 1
       })
     })
@@ -1138,6 +1216,110 @@ const buyNow = async (product: Product) => {
 const openCart = async () => {
   activeTab.value = 'cart'
   await refreshCartCount()
+}
+
+// 购物车方法
+const hasCheckedItems = computed(() => {
+  return cartItems.value.length > 0
+})
+
+const updateQuantity = async (item: any, change: number) => {
+  const newQuantity = item.quantity + change
+  if (newQuantity < 1) return
+  
+  try {
+    await request(`/cart/${item.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        quantity: newQuantity
+      })
+    })
+    await refreshCartCount()
+  } catch (error: any) {
+    alert(error?.message || '更新数量失败')
+  }
+}
+
+const onQuantityChange = async (item: any, event: Event) => {
+  const target = event.target as HTMLInputElement
+  const newQuantity = parseInt(target.value)
+  if (isNaN(newQuantity) || newQuantity < 1) {
+    target.value = item.quantity.toString()
+    return
+  }
+  
+  try {
+    await request(`/cart/${item.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        quantity: newQuantity
+      })
+    })
+    await refreshCartCount()
+  } catch (error: any) {
+    alert(error?.message || '更新数量失败')
+  }
+}
+
+const removeFromCart = async (item: any) => {
+  if (!confirm(`确定要删除 ${item.product?.name} 吗？`)) return
+  
+  try {
+    await request(`/cart/${item.id}`, {
+      method: 'DELETE'
+    })
+    await refreshCartCount()
+  } catch (error: any) {
+    alert(error?.message || '删除失败')
+  }
+}
+
+const clearCart = async () => {
+  if (!confirm('确定要清空购物车吗？')) return
+  
+  try {
+    await request('/cart', {
+      method: 'DELETE'
+    })
+    await refreshCartCount()
+  } catch (error: any) {
+    alert(error?.message || '清空失败')
+  }
+}
+
+const checkoutFromCart = async () => {
+  if (cartItems.value.length === 0) {
+    alert('购物车为空')
+    return
+  }
+  
+  // 跳转到订单确认页面（这里简化处理，直接创建订单）
+  const items = cartItems.value.map(item => ({
+    product_id: item.product_id,
+    quantity: item.quantity
+  }))
+  
+  try {
+    const orderRes = await request('/orders', {
+      method: 'POST',
+      body: JSON.stringify({
+        items,
+        shipping_address: '请输入收货地址',
+        receiver: '请输入收货人',
+        receiver_phone: '请输入手机号'
+      })
+    })
+    
+    if (orderRes?.success) {
+      // 清空购物车
+      await clearCart()
+      await loadOrders()
+      activeTab.value = 'orders'
+      alert('订单创建成功，请完善收货信息')
+    }
+  } catch (error: any) {
+    alert(error?.message || '下单失败')
+  }
 }
 
 const openOrders = async () => {
@@ -1530,6 +1712,68 @@ const deleteOrder = async (order: any) => {
 const openOrderDetail = (order: OrderViewItem) => {
   selectedOrder.value = order
   showOrderDetail.value = true
+}
+
+const getStatusText = (status: string): string => {
+  const statusMap: Record<string, string> = {
+    'pending': '待支付',
+    'paid': '已支付',
+    'shipped': '已发货',
+    'delivered': '已送达',
+    'completed': '已完成',
+    'cancelled': '已取消',
+    'refunded': '已退款'
+  }
+  return statusMap[status] || status
+}
+
+const cancelOrder = async (order: OrderViewItem) => {
+  if (!confirm('确定要取消该订单吗？')) return
+  
+  try {
+    const data = await request(`/orders/${order.id}/cancel`, {
+      method: 'POST'
+    })
+    if (data?.success) {
+      alert('订单取消成功')
+      showOrderDetail.value = false
+      await loadOrders()
+    }
+  } catch (error: any) {
+    alert(error?.message || '取消订单失败')
+  }
+}
+
+const editOrder = async (order: OrderViewItem) => {
+  const newAddress = prompt('请输入收货地址:', order.shippingAddress || '')
+  if (!newAddress) return
+  
+  const newReceiver = prompt('请输入收货人:', order.receiver || '')
+  if (!newReceiver) return
+  
+  const newPhone = prompt('请输入手机号:', order.receiverPhone || '')
+  if (!newPhone) return
+  
+  const newNote = prompt('请输入备注:', order.note || '')
+  
+  try {
+    const data = await request(`/orders/${order.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        shipping_address: newAddress,
+        receiver: newReceiver,
+        receiver_phone: newPhone,
+        note: newNote
+      })
+    })
+    if (data?.success) {
+      alert('订单信息更新成功')
+      showOrderDetail.value = false
+      await loadOrders()
+    }
+  } catch (error: any) {
+    alert(error?.message || '更新订单失败')
+  }
 }
 
 const formatOrderDate = (value: string) => {
@@ -2734,6 +2978,304 @@ body {
   margin: 6px 0;
   color: #856404;
   font-size: 14px;
+}
+
+/* 购物车样式 */
+.cart-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.cart-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cart-item {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 20px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s;
+}
+
+.cart-item:hover {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+  transform: translateY(-2px);
+}
+
+.cart-item-image {
+  flex-shrink: 0;
+  width: 100px;
+  height: 100px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.cart-item-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cart-item-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cart-item-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+  margin: 0;
+}
+
+.cart-item-price {
+  font-size: 14px;
+  color: #666;
+  margin: 0;
+}
+
+.cart-item-quantity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-qty {
+  width: 32px;
+  height: 32px;
+  border: 1px solid #ddd;
+  background: white;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.btn-qty:hover:not(:disabled) {
+  background: #f0f9ff;
+  border-color: #667eea;
+  color: #667eea;
+}
+
+.btn-qty:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.qty-input {
+  width: 60px;
+  text-align: center;
+  padding: 6px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.cart-item-subtotal {
+  font-size: 16px;
+  font-weight: 600;
+  color: #f56c6c;
+  margin: 0;
+}
+
+.cart-item-actions {
+  flex-shrink: 0;
+}
+
+/* 订单详情样式 */
+.modal-content.large {
+  max-width: 800px;
+}
+
+.order-detail-section {
+  background: #f8fafc;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.order-info-row {
+  display: flex;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
+.order-info-row:last-child {
+  margin-bottom: 0;
+}
+
+.order-info-row .label {
+  width: 100px;
+  color: #666;
+  flex-shrink: 0;
+}
+
+.order-info-row .value {
+  color: #333;
+  font-weight: 500;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-badge.pending {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.status-badge.paid {
+  background: #d4edda;
+  color: #155724;
+}
+
+.status-badge.shipped {
+  background: #d1ecf1;
+  color: #0c5460;
+}
+
+.status-badge.delivered,
+.status-badge.completed {
+  background: #d4edda;
+  color: #155724;
+}
+
+.status-badge.cancelled,
+.status-badge.refunded {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.order-shipping-section {
+  margin-bottom: 20px;
+}
+
+.order-shipping-section h4 {
+  margin-bottom: 12px;
+  color: #333;
+  font-size: 16px;
+}
+
+.order-shipping-section p {
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: #666;
+}
+
+.order-items-section {
+  margin-bottom: 20px;
+}
+
+.order-items-section h4 {
+  margin-bottom: 12px;
+  color: #333;
+  font-size: 16px;
+}
+
+.order-item-list {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.order-item-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border-bottom: 1px solid #e0e0e0;
+  background: white;
+}
+
+.order-item-row:last-child {
+  border-bottom: none;
+}
+
+.order-item-img {
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+
+.order-item-info {
+  flex: 1;
+}
+
+.item-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.item-meta {
+  font-size: 13px;
+  color: #666;
+  margin: 0;
+}
+
+.order-item-total {
+  font-size: 16px;
+  font-weight: 600;
+  color: #f56c6c;
+  min-width: 80px;
+  text-align: right;
+}
+
+.order-total-section {
+  background: #f8fafc;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.total-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
+.total-row:last-child {
+  margin-bottom: 0;
+}
+
+.total-row.final {
+  border-top: 2px solid #e0e0e0;
+  padding-top: 12px;
+  margin-top: 12px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.final-amount {
+  color: #f56c6c;
+  font-size: 20px;
+}
+
+.order-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  padding-top: 20px;
+  border-top: 1px solid #e0e0e0;
 }
 
 /* 页脚 */
