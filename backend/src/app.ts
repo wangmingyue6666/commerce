@@ -28,7 +28,7 @@ import { logger } from './utils/logger';
 
 // 创建Express应用
 const app = express();
-const PORT = 3000;
+const PORT = parseInt(process.env.PORT || '3000');
 
 // 安全中间件
 app.use(helmet());
@@ -38,8 +38,10 @@ app.use(compression());
 const allowedOrigins = [
   'http://localhost:8080',
   'http://localhost:8081',
+  'http://localhost:8082',
   'http://127.0.0.1:8080',
-  'http://127.0.0.1:8081'
+  'http://127.0.0.1:8081',
+  'http://127.0.0.1:8082'
 ];
 
 const corsOptions = {
@@ -47,7 +49,8 @@ const corsOptions = {
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      console.log('CORS denied for origin:', origin);
+      callback(null, false);
     }
   },
   credentials: true,

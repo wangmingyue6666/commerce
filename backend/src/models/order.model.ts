@@ -309,7 +309,7 @@ OrderItem.init(
       allowNull: false
     },
     product_image: {
-      type: DataTypes.STRING(255),
+      type: DataTypes.TEXT,
       allowNull: true
     },
     price: {

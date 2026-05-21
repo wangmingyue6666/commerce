@@ -185,14 +185,20 @@ router.post('/', [
   const transaction = await sequelize.transaction();
   
   try {
+    console.log('=== 开始创建订单 ===');
+    console.log('请求体:', JSON.stringify(req.body, null, 2));
+    
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       await transaction.rollback();
+      console.log('验证失败:', errors.array());
       return res.status(400).json({ success: false, errors: errors.array() });
     }
 
     const userId = (req as any).user.id;
     const { items, shipping_address, receiver, receiver_phone, payment_method, note } = req.body;
+    console.log('用户ID:', userId);
+    console.log('商品列表:', items);
 
     // 检查商品库存并计算总金额
     let totalAmount = 0;
@@ -235,7 +241,7 @@ router.post('/', [
       orderItems.push({
         product_id: product.id,
         product_name: product.name,
-        product_image: product.main_image,
+        product_image: product.main_image ? (product.main_image.length > 1000 ? '' : product.main_image) : '',
         price: product.price,
         quantity: item.quantity,
         subtotal
@@ -293,7 +299,12 @@ router.post('/', [
   } catch (error) {
     await transaction.rollback();
     logger.error('创建订单失败:', error);
-    res.status(500).json({ success: false, message: '服务器内部错误' });
+    console.error('创建订单详细错误:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: '服务器内部错误',
+      error: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined 
+    });
   }
 });
 

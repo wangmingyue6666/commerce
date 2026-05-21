@@ -41,6 +41,7 @@ router.post('/login', async (req, res) => {
 
     // 验证密码
     const valid = await user.validatePassword(password);
+    
     if (!valid) {
       res.status(401).json({ success: false, message: '用户名或密码错误' });
       return;
@@ -133,6 +134,15 @@ router.get('/me', authenticateToken, async (req, res) => {
     res.json({ success: true, data: safeUser });
   } catch (error) {
     console.error('获取用户信息错误:', error);
+    res.status(500).json({ success: false, message: '服务器内部错误' });
+  }
+});
+
+router.post('/logout', authenticateToken, async (_req, res) => {
+  try {
+    res.json({ success: true, message: '退出登录成功' });
+  } catch (error) {
+    console.error('退出登录错误:', error);
     res.status(500).json({ success: false, message: '服务器内部错误' });
   }
 });

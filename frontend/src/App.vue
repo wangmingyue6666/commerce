@@ -87,7 +87,13 @@
           <div class="product-grid">
             <div class="product-card" v-for="product in products" :key="product.id">
               <div class="product-image">
-                <img :src="resolveProductImage(product)" :alt="product.name" @error="onImageError" />
+                <img 
+                  :src="fallbackImage" 
+                  :data-src="resolveProductImage(product)"
+                  :alt="product.name" 
+                  @error="onImageError" 
+                  class="lazy-image"
+                />
                 <div class="product-badge" v-if="product.discount">-{{ product.discount }}%</div>
                 <div class="product-title-container">
                   <div class="product-title-icon">📦</div>
@@ -126,7 +132,13 @@
             <div class="product-grid">
               <div class="product-card" v-for="product in floor.products" :key="`floor-${floor.id}-${product.id}`">
                 <div class="product-image">
-                  <img :src="resolveProductImage(product)" :alt="product.name" @error="onImageError" />
+                  <img 
+                    :src="fallbackImage" 
+                    :data-src="resolveProductImage(product)"
+                    :alt="product.name" 
+                    @error="onImageError" 
+                    class="lazy-image"
+                  />
                   <div class="product-badge" v-if="product.discount">-{{ product.discount }}%</div>
                 </div>
                 <div class="product-info">
@@ -154,7 +166,13 @@
           <div class="product-grid">
             <div class="product-card" v-for="product in recommendProducts" :key="`recommend-${product.id}`">
               <div class="product-image">
-                <img :src="resolveProductImage(product)" :alt="product.name" @error="onImageError" />
+                <img 
+                  :src="fallbackImage" 
+                  :data-src="resolveProductImage(product)"
+                  :alt="product.name" 
+                  @error="onImageError" 
+                  class="lazy-image"
+                />
                 <div class="product-badge" v-if="product.discount">-{{ product.discount }}%</div>
                 <div class="product-title-container">
                   <div class="product-title-icon">📦</div>
@@ -187,7 +205,7 @@
           <div class="section-header">
             <h2 class="section-title">我的购物车</h2>
             <div class="cart-actions">
-              <button class="btn btn-primary" @click="checkoutFromCart" :disabled="!hasCheckedItems">去结算</button>
+              <button class="btn btn-primary" @click="checkoutFromCart" :disabled="cartItems.length === 0">去结算</button>
               <button class="btn btn-secondary" @click="clearCart">清空购物车</button>
               <button class="btn btn-secondary" @click="refreshCartCount">刷新</button>
             </div>
@@ -214,6 +232,132 @@
               <div class="cart-item-actions">
                 <button class="btn btn-danger" @click="removeFromCart(item)">删除</button>
               </div>
+            </div>
+          </div>
+          <!-- 购物车底部结算栏 -->
+          <div v-if="cartItems.length > 0" class="cart-footer">
+            <div class="cart-total">
+              <span class="total-label">商品总计：</span>
+              <span class="total-price">¥{{ cartTotal.toFixed(2) }}</span>
+            </div>
+            <div class="cart-shipping">
+              <span>运费：</span>
+              <span>{{ cartTotal >= 100 ? '免运费' : '¥10.00' }}</span>
+            </div>
+            <button class="btn btn-primary checkout-btn" @click="checkoutFromCart">
+              去结算 ({{ cartItems.length }})
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 订单确认页面 -->
+      <section class="checkout-page" v-if="activeTab === 'checkout'">
+        <div class="container">
+          <div class="checkout-header">
+            <h2 class="section-title">确认订单</h2>
+            <button class="btn btn-secondary" @click="goBackToCart">← 返回购物车</button>
+          </div>
+
+          <div class="checkout-content">
+            <!-- 收货信息 -->
+            <div class="checkout-section">
+              <h3>收货信息</h3>
+              <div class="form-group">
+                <label>收货人 *</label>
+                <input type="text" v-model="checkoutForm.receiver" placeholder="请输入收货人姓名" />
+              </div>
+              <div class="form-group">
+                <label>手机号码 *</label>
+                <input type="tel" v-model="checkoutForm.receiver_phone" placeholder="请输入手机号码" />
+              </div>
+              <div class="form-group">
+                <label>收货地址 *</label>
+                <textarea v-model="checkoutForm.shipping_address" placeholder="请输入详细收货地址" rows="3"></textarea>
+              </div>
+              <div class="form-group">
+                <label>订单备注</label>
+                <textarea v-model="checkoutForm.note" placeholder="选填，如有特殊要求请备注" rows="2"></textarea>
+              </div>
+            </div>
+
+            <!-- 商品清单 -->
+            <div class="checkout-section">
+              <h3>商品清单</h3>
+              <div class="order-items-list">
+                <div class="order-item-row" v-for="item in selectedCartItems" :key="item.id">
+                  <img :src="item.product?.main_image || 'https://via.placeholder.com/80x80/409eff/ffffff?text=商品'" class="order-item-img" />
+                  <div class="order-item-info">
+                    <p class="item-name">{{ item.product?.name || '未知商品' }}</p>
+                    <p class="item-price">¥{{ item.product?.price || 0 }}</p>
+                  </div>
+                  <div class="order-item-qty">×{{ item.quantity }}</div>
+                  <div class="order-item-subtotal">¥{{ (Number(item.product?.price || 0) * item.quantity).toFixed(2) }}</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 订单金额 -->
+            <div class="checkout-section">
+              <h3>订单金额</h3>
+              <div class="order-summary">
+                <div class="summary-row">
+                  <span>商品总额：</span>
+                  <span>¥{{ checkoutTotal.toFixed(2) }}</span>
+                </div>
+                <div class="summary-row">
+                  <span>运费：</span>
+                  <span>{{ checkoutTotal >= 100 ? '¥0.00' : '¥10.00' }}</span>
+                </div>
+                <div class="summary-row discount" v-if="checkoutTotal >= 100">
+                  <span>运费优惠：</span>
+                  <span>-¥10.00</span>
+                </div>
+                <div class="summary-row final">
+                  <span>应付金额：</span>
+                  <span class="final-amount">¥{{ checkoutFinalAmount.toFixed(2) }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 支付方式 -->
+            <div class="checkout-section">
+              <h3>支付方式</h3>
+              <div class="payment-options">
+                <label class="payment-option">
+                  <input type="radio" v-model="checkoutForm.payment_method" value="alipay" checked />
+                  <span class="payment-icon">💳</span>
+                  <span>支付宝</span>
+                </label>
+                <label class="payment-option">
+                  <input type="radio" v-model="checkoutForm.payment_method" value="wechat" />
+                  <span class="payment-icon">💬</span>
+                  <span>微信支付</span>
+                </label>
+                <label class="payment-option">
+                  <input type="radio" v-model="checkoutForm.payment_method" value="bank" />
+                  <span class="payment-icon">🏦</span>
+                  <span>银行卡</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- 提交按钮 -->
+            <div class="checkout-actions">
+              <button class="btn btn-secondary" @click="goBackToCart">返回修改</button>
+              <button class="btn btn-primary submit-btn" @click="submitOrder">提交订单</button>
+            </div>
+          </div>
+
+          <!-- 订单提交结果 -->
+          <div v-if="orderSubmitResult" class="submit-result" :class="{ success: orderSubmitResult.success, error: !orderSubmitResult.success }">
+            <div class="result-icon">{{ orderSubmitResult.success ? '🎉' : '❌' }}</div>
+            <h3>{{ orderSubmitResult.success ? '订单提交成功' : '订单提交失败' }}</h3>
+            <p>{{ orderSubmitResult.message }}</p>
+            <p v-if="orderSubmitResult.orderNo" class="order-no">订单号：{{ orderSubmitResult.orderNo }}</p>
+            <div class="result-actions">
+              <button class="btn btn-primary" @click="goToOrders">查看订单</button>
+              <button class="btn btn-secondary" @click="continueShopping">继续购物</button>
             </div>
           </div>
         </div>
@@ -790,7 +934,7 @@ interface OrderViewItem {
   }>
 }
 
-const API_BASE = '/api'
+const API_BASE = 'http://127.0.0.1:3001/api'
 
 const request = async (path: string, options: RequestInit = {}) => {
   const token = localStorage.getItem('token')
@@ -837,7 +981,7 @@ const currentUser = ref<string>('')
 const currentRole = ref<'admin' | 'user' | ''>('')
 const userMenuOpen = ref(false)
 const loadingProducts = ref(false)
-const activeTab = ref<'home' | 'products' | 'categories' | 'cart' | 'orders' | 'admin'>('home')
+const activeTab = ref<'home' | 'products' | 'categories' | 'cart' | 'checkout' | 'orders' | 'admin'>('home')
 const pendingRoute = ref<string>('') // 用于记录登录前想要访问的页面
 const cartItems = ref<CartViewItem[]>([])
 const orders = ref<OrderViewItem[]>([])
@@ -1023,6 +1167,21 @@ const orderStatusForm = ref({
   action_note: ''
 })
 
+// 结算页面相关状态
+const checkoutForm = ref({
+  receiver: '',
+  receiver_phone: '',
+  shipping_address: '',
+  note: '',
+  payment_method: 'alipay'
+})
+
+// 选中的购物车项（用于结算）
+const selectedCartItems = ref<CartViewItem[]>([])
+
+// 订单提交结果
+const orderSubmitResult = ref<{ success: boolean; message: string; orderNo?: string } | null>(null)
+
 // 分类数据
 const categories = ref<CategoryItem[]>([])
 
@@ -1131,6 +1290,7 @@ const refreshCartCount = async () => {
   try {
     const data = await request('/cart')
     const items = Array.isArray(data?.data) ? data.data : data?.data?.items || []
+    
     cartItems.value = items
     cartCount.value = items.length
   } catch (error) {
@@ -1246,6 +1406,26 @@ const hasCheckedItems = computed(() => {
   return cartItems.value.length > 0
 })
 
+// 购物车总价
+const cartTotal = computed(() => {
+  return cartItems.value.reduce((sum, item) => {
+    return sum + Number(item.product?.price || 0) * item.quantity
+  }, 0)
+})
+
+// 结算页面总价
+const checkoutTotal = computed(() => {
+  return selectedCartItems.value.reduce((sum, item) => {
+    return sum + Number(item.product?.price || 0) * item.quantity
+  }, 0)
+})
+
+// 结算页面最终金额（含运费）
+const checkoutFinalAmount = computed(() => {
+  const shippingFee = checkoutTotal.value >= 100 ? 0 : 10
+  return checkoutTotal.value + shippingFee
+})
+
 const updateQuantity = async (item: any, change: number) => {
   const newQuantity = item.quantity + change
   if (newQuantity < 1) return
@@ -1311,13 +1491,47 @@ const clearCart = async () => {
 }
 
 const checkoutFromCart = async () => {
+  const token = localStorage.getItem('token')
+  if (!token) {
+    pendingRoute.value = 'checkout'
+    showLogin.value = true
+    return
+  }
+  
   if (cartItems.value.length === 0) {
     alert('购物车为空')
     return
   }
   
-  // 跳转到订单确认页面（这里简化处理，直接创建订单）
-  const items = cartItems.value.map(item => ({
+  // 保存选中的购物车项到结算列表
+  selectedCartItems.value = [...cartItems.value]
+  
+  // 跳转到结算页面
+  activeTab.value = 'checkout'
+}
+
+const goBackToCart = () => {
+  activeTab.value = 'cart'
+  orderSubmitResult.value = null
+}
+
+const submitOrder = async () => {
+  // 验证表单
+  if (!checkoutForm.value.receiver.trim()) {
+    alert('请输入收货人姓名')
+    return
+  }
+  if (!checkoutForm.value.receiver_phone.trim()) {
+    alert('请输入手机号码')
+    return
+  }
+  if (!checkoutForm.value.shipping_address.trim()) {
+    alert('请输入收货地址')
+    return
+  }
+  
+  // 构建订单商品数据
+  const items = selectedCartItems.value.map(item => ({
     product_id: item.product_id,
     quantity: item.quantity
   }))
@@ -1327,9 +1541,11 @@ const checkoutFromCart = async () => {
       method: 'POST',
       body: JSON.stringify({
         items,
-        shipping_address: '请输入收货地址',
-        receiver: '请输入收货人',
-        receiver_phone: '请输入手机号'
+        shipping_address: checkoutForm.value.shipping_address,
+        receiver: checkoutForm.value.receiver,
+        receiver_phone: checkoutForm.value.receiver_phone,
+        note: checkoutForm.value.note,
+        payment_method: checkoutForm.value.payment_method || 'alipay'
       })
     })
     
@@ -1337,11 +1553,42 @@ const checkoutFromCart = async () => {
       // 清空购物车
       await clearCart()
       await loadOrders()
-      activeTab.value = 'orders'
-      alert('订单创建成功，请完善收货信息')
+      
+      // 显示成功结果
+      orderSubmitResult.value = {
+        success: true,
+        message: '订单提交成功，感谢您的购买！',
+        orderNo: orderRes.data?.order_no || orderRes.data?.orderNo
+      }
+    } else {
+      orderSubmitResult.value = {
+        success: false,
+        message: orderRes?.message || '订单提交失败'
+      }
     }
   } catch (error: any) {
-    alert(error?.message || '下单失败')
+    orderSubmitResult.value = {
+      success: false,
+      message: error?.message || '订单提交失败，请稍后重试'
+    }
+  }
+}
+
+const goToOrders = async () => {
+  activeTab.value = 'orders'
+  orderSubmitResult.value = null
+  await loadOrders()
+}
+
+const continueShopping = () => {
+  activeTab.value = 'home'
+  orderSubmitResult.value = null
+  checkoutForm.value = {
+    receiver: '',
+    receiver_phone: '',
+    shipping_address: '',
+    note: '',
+    payment_method: 'alipay'
   }
 }
 
@@ -1854,6 +2101,15 @@ const handleLogin = async () => {
     if (pendingRoute.value) {
       if (pendingRoute.value === 'orders') {
         activeTab.value = 'orders'
+      } else if (pendingRoute.value === 'checkout') {
+        // 登录成功后跳转到结算页面，需要先加载购物车
+        await refreshCartCount()
+        if (cartItems.value.length > 0) {
+          selectedCartItems.value = [...cartItems.value]
+          activeTab.value = 'checkout'
+        } else {
+          activeTab.value = 'cart'
+        }
       }
       pendingRoute.value = ''
     }
@@ -1864,16 +2120,60 @@ const handleLogin = async () => {
 }
 
 // 生命周期
+const initLazyLoad = () => {
+  const lazyImages = document.querySelectorAll('img.lazy-image')
+  
+  const imageObserver = new IntersectionObserver((entries, observer) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        const img = entry.target as HTMLImageElement
+        const src = img.dataset.src
+        
+        if (src) {
+          const imgElement = new Image()
+          imgElement.onload = () => {
+            img.src = src
+            img.classList.add('loaded')
+          }
+          imgElement.onerror = () => {
+            img.src = fallbackImage
+            img.classList.add('loaded')
+          }
+          imgElement.src = src
+        }
+        
+        observer.unobserve(img)
+      }
+    })
+  }, {
+    rootMargin: '50px',
+    threshold: 0.1
+  })
+  
+  lazyImages.forEach(img => {
+    imageObserver.observe(img)
+  })
+  
+  return imageObserver
+}
+
 onMounted(async () => {
   console.log('商城页面加载完成')
   await Promise.all([loadProducts(), loadCategories()])
   await restoreSession()
+  
+  setTimeout(() => {
+    initLazyLoad()
+  }, 100)
 })
 
 // 监听activeTab变化，当切换到商品页面时加载商品数据
 watch(activeTab, async (newTab, oldTab) => {
   if (newTab === 'products' && oldTab !== 'products') {
     await loadProducts()
+    setTimeout(() => {
+      initLazyLoad()
+    }, 100)
   }
 })
 
@@ -2325,6 +2625,15 @@ body {
 .product-card:hover .product-image img {
   transform: scale(1.08);
   filter: brightness(1.05);
+}
+
+img.lazy-image {
+  opacity: 0;
+  transition: opacity 0.3s ease-in-out;
+}
+
+img.lazy-image.loaded {
+  opacity: 1;
 }
 
 .product-badge {
@@ -3301,6 +3610,313 @@ body {
   justify-content: center;
   padding-top: 20px;
   border-top: 1px solid #e0e0e0;
+}
+
+/* 购物车底部结算栏 */
+.cart-footer {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  margin-top: 24px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.cart-total {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.total-label {
+  font-size: 16px;
+  color: #666;
+}
+
+.total-price {
+  font-size: 24px;
+  font-weight: 700;
+  color: #f56c6c;
+}
+
+.cart-shipping {
+  font-size: 14px;
+  color: #67c23a;
+}
+
+.checkout-btn {
+  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+  color: white;
+  padding: 14px 32px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.checkout-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(255, 107, 107, 0.4);
+}
+
+.checkout-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* 结算页面 */
+.checkout-page {
+  padding: 60px 0;
+  background: #f8f9fa;
+  min-height: calc(100vh - 120px);
+}
+
+.checkout-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 32px;
+}
+
+.checkout-content {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.checkout-section {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+
+.checkout-section h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.checkout-section .form-group {
+  margin-bottom: 16px;
+}
+
+.checkout-section .form-group:last-child {
+  margin-bottom: 0;
+}
+
+.order-items-list {
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.order-items-list .order-item-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+.order-items-list .order-item-row:last-child {
+  border-bottom: none;
+}
+
+.order-items-list .order-item-img {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.order-items-list .order-item-info {
+  flex: 1;
+}
+
+.order-items-list .item-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 6px;
+}
+
+.order-items-list .item-price {
+  font-size: 14px;
+  color: #f56c6c;
+}
+
+.order-items-list .order-item-qty {
+  font-size: 14px;
+  color: #666;
+  margin-right: 16px;
+}
+
+.order-items-list .order-item-subtotal {
+  font-size: 16px;
+  font-weight: 600;
+  color: #f56c6c;
+  min-width: 80px;
+  text-align: right;
+}
+
+.order-summary {
+  background: #fafafa;
+  padding: 20px;
+  border-radius: 8px;
+}
+
+.order-summary .summary-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  font-size: 14px;
+  color: #666;
+}
+
+.order-summary .summary-row:last-child {
+  margin-bottom: 0;
+}
+
+.order-summary .summary-row.discount {
+  color: #67c23a;
+}
+
+.order-summary .summary-row.final {
+  border-top: 2px solid #e0e0e0;
+  padding-top: 12px;
+  margin-top: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+.payment-options {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.payment-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 12px 20px;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  transition: all 0.3s;
+}
+
+.payment-option:hover {
+  border-color: #409eff;
+}
+
+.payment-option input[type="radio"] {
+  display: none;
+}
+
+.payment-option input[type="radio"]:checked + .payment-icon {
+  color: #409eff;
+}
+
+.payment-option input[type="radio"]:checked ~ span:last-child {
+  color: #409eff;
+  font-weight: 600;
+}
+
+.payment-icon {
+  font-size: 24px;
+}
+
+.checkout-actions {
+  display: flex;
+  gap: 16px;
+  justify-content: flex-end;
+  padding: 20px 0;
+}
+
+.submit-btn {
+  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+  color: white;
+  padding: 14px 40px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.submit-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(255, 107, 107, 0.4);
+}
+
+/* 订单提交结果 */
+.submit-result {
+  background: white;
+  border-radius: 16px;
+  padding: 40px;
+  text-align: center;
+  margin-top: 32px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+.submit-result.success {
+  border: 2px solid #d4edda;
+}
+
+.submit-result.error {
+  border: 2px solid #f8d7da;
+}
+
+.result-icon {
+  font-size: 64px;
+  margin-bottom: 20px;
+}
+
+.submit-result h3 {
+  font-size: 24px;
+  margin-bottom: 12px;
+}
+
+.submit-result.success h3 {
+  color: #155724;
+}
+
+.submit-result.error h3 {
+  color: #721c24;
+}
+
+.submit-result p {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.order-no {
+  font-size: 16px !important;
+  font-weight: 600;
+  color: #409eff !important;
+}
+
+.result-actions {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  margin-top: 24px;
 }
 
 /* 页脚 */
