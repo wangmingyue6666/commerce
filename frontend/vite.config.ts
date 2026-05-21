@@ -33,10 +33,9 @@ export default defineConfig({
   },
   server: {
     port: 8080,
-    host: '127.0.0.1',
+    host: true,
     strictPort: false,
     hmr: true,
-    middlewareMode: false,
     proxy: {
       '/api': {
         target: 'http://localhost:3000',
@@ -45,7 +44,7 @@ export default defineConfig({
       },
     },
   },
-  // 明确指定为SPA应用
+  // 明确指定为SPA应用，自动处理路由回退
   appType: 'spa',
   css: {
     preprocessorOptions: {

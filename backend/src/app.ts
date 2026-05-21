@@ -133,4 +133,15 @@ if (process.env.NODE_ENV !== 'test') {
   });
 }
 
+// 未捕获异常处理
+process.on('uncaughtException', (error: Error) => {
+  console.error('Uncaught Exception:', error);
+  process.exit(1);
+});
+
+// 未处理的Promise拒绝处理
+process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
 export default app;

@@ -686,13 +686,13 @@
                 <span>商品总额：</span>
                 <span>¥{{ selectedOrder.totalAmount }}</span>
               </div>
-              <div class="total-row" v-if="selectedOrder.discountAmount > 0">
+              <div class="total-row" v-if="(selectedOrder.discountAmount || 0) > 0">
                 <span>优惠金额：</span>
-                <span>-¥{{ selectedOrder.discountAmount }}</span>
+                <span>-¥{{ selectedOrder.discountAmount || 0 }}</span>
               </div>
-              <div class="total-row" v-if="selectedOrder.shippingFee > 0">
+              <div class="total-row" v-if="(selectedOrder.shippingFee || 0) > 0">
                 <span>运费：</span>
-                <span>¥{{ selectedOrder.shippingFee }}</span>
+                <span>¥{{ selectedOrder.shippingFee || 0 }}</span>
               </div>
               <div class="total-row final">
                 <span>实付金额：</span>
@@ -731,8 +731,13 @@ interface Product {
   originalPrice?: number
   image: string
   main_image?: string
-  images?: string[]
+  images?: string[] | string
   discount?: number
+  category_id?: number
+  market_price?: number
+  stock?: number
+  brand?: string
+  status?: number
 }
 
 interface CategoryItem {
@@ -745,11 +750,14 @@ interface CategoryItem {
 interface CartViewItem {
   id: number
   productId: number
+  product_id: number
   quantity: number
   product?: {
+    id?: number
     name?: string
     image?: string
     main_image?: string
+    price?: number
   }
 }
 
@@ -759,12 +767,26 @@ interface OrderViewItem {
   totalAmount: number
   status: string
   createdAt: string
+  paidAt?: string
+  receiver?: string
+  receiverPhone?: string
+  shippingAddress?: string
+  note?: string
+  discountAmount?: number
+  shippingFee?: number
+  finalAmount?: number
   items?: Array<{
     productId: number
     productName: string
     price: number
     quantity: number
     subtotal: number
+    product?: {
+      name?: string
+      image?: string
+      main_image?: string
+    }
+    product_name?: string
   }>
 }
 
@@ -991,7 +1013,8 @@ const productForm = ref({
   brand: '',
   main_image: '',
   status: 1,
-  description: ''
+  description: '',
+  images: ''
 })
 
 // 订单状态表单
@@ -1513,7 +1536,8 @@ const closeProductModal = () => {
     brand: '',
     main_image: '',
     status: 1,
-    description: ''
+    description: '',
+    images: ''
   }
   productImages.value = []
 }
@@ -1529,7 +1553,8 @@ const editProduct = (product: any) => {
     brand: product.brand || '',
     main_image: product.main_image || '',
     status: product.status || 1,
-    description: product.description || ''
+    description: product.description || '',
+    images: ''
   }
   
   // 加载商品图片
@@ -1853,7 +1878,7 @@ watch(activeTab, async (newTab, oldTab) => {
 })
 
 // 监听adminTab变化，当切换到商品管理页面时加载商品数据
-watch(adminTab, async (newTab, oldTab) => {
+watch(adminTab, async (newTab) => {
   if (newTab === 'products' && activeTab.value === 'admin') {
     await loadAdminProducts()
   }

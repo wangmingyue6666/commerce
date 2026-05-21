@@ -35,7 +35,7 @@ export const testConnection = async (): Promise<boolean> => {
     
     // 同步数据库（开发环境）
     if (process.env.NODE_ENV === 'development') {
-      await sequelize.sync({ alter: true });
+      await sequelize.sync({ force: false });
       console.log('✅ Database synchronized.');
     }
     return true;

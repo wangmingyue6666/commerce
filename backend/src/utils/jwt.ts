@@ -18,7 +18,7 @@ export class JwtService {
    */
   static generateToken(payload: JwtPayload): string {
     const options: SignOptions = {
-      expiresIn: this.EXPIRES_IN
+      expiresIn: this.EXPIRES_IN as SignOptions['expiresIn']
     };
     return jwt.sign(payload, this.SECRET as string, options);
   }
